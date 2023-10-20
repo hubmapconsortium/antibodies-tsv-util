@@ -8,9 +8,9 @@ with open(here / "README.rst", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="hubmap-fastq-utils",
-    version="0.2.5",
-    description="FASTQ utility functions for HuBMAP computational pipelines",
+    name="antibodies-tsv-util",
+    version="0.1.0",
+    description="antibodies.tsv utility functions for HuBMAP computational pipelines",
     long_description=long_description,
     long_description_content_type="text/x-rst",
     url="https://github.com/hubmapconsortium/antibodies-tsv-util",
