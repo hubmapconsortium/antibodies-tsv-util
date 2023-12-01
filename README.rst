@@ -9,7 +9,7 @@ antibodies.tsv file utilities
 Overview
 --------
 
-This package provides convenience functions for standardizing antibdoy names according to an antibodies.tsv file.
+This package provides convenience functions for standardizing antibody names according to an antibodies.tsv file.
 
 Installation
 ------------
