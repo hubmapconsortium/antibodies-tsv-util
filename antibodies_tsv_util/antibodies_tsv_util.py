@@ -26,6 +26,26 @@ structured_annotation_template = """<StructuredAnnotations>
 metadata_filename_pattern = re.compile(r"^[0-9A-Fa-f]{32}antibodies\.tsv$")
 
 
+def add_cycle_channel_numbers(channel_names: List[str]) -> List[str]:
+    """
+    Adds cycle and channel info during the collect dataset info step. Replaces a similar function that adds a number on the end of duplicate channel names.
+    """
+    new_names = []
+    cycle_count = 1
+    channel_count = 1
+
+    for original_name in channel_names:
+        new_name = f"cyc{cycle_count}_ch{channel_count}_orig{original_name}"
+        new_names.append(new_name)
+
+        channel_count += 1
+        if channel_count > 4:  # Assuming 4 channels per cycle, modify accordingly
+            channel_count = 1
+            cycle_count += 1
+
+    return new_names
+
+
 def add_structured_annotations(xml_string: str, sa_str: str) -> str:
     """
     Adds structured annotation at correct location. May need to be used in a loop depending on use.
