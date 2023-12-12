@@ -6,6 +6,7 @@ from typing import List, Optional
 
 import pandas as pd
 from tifffile import TiffFile
+from ome_types import XMLAnnotation
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -210,25 +211,29 @@ def generate_channel_ids(channelNames: List[str]) -> List[str]:
     return channel_ids
 
 
-def generate_structured_annotations(
-    xml_str: str,
-    channel_ids: List[str],
-    updated_channel_names: List[str],
-    original_channel_names: List[str],
-    antibodies_df: pd.DataFrame,
-) -> str:
-    """
-    Generates each structured annotation and returns a string off all of the structured annotations.
-    """
-    full_ch_info = ""
-    for i in range(0, len(updated_channel_names)):
-        xml_str.image().Pixels.Channel(i).Name = updated_channel_names[i]
+def get_original_names(og_ch_names_df: pd.DataFrame, antibodies_df: pd.DataFrame) -> List[str]:
+    mapping = map_cycles_and_channels(antibodies_df)
+    original_channel_names = []
+    for i in og_ch_names_df.index:
+        channel_id = og_ch_names_df.at[i, "channel_id"].lower()
+        original_name = og_ch_names_df.at[i, "channel_name"]
+        target = mapping.get(channel_id, None)
+        if target is not None:
+            original_channel_names.append(original_name)
+        else:
+            original_channel_names.append("None")
+    return original_channel_names
+
+
+def generate_structured_annotations(xml, channel_ids, og_ch_names_df, antb_info, channelNames ):
+    original_channel_names = get_original_names(og_ch_names_df, antb_info)
+    for i in range(len(channelNames)):
+        xml.images[0].pixels.channels[i].name = channelNames[i]
         channel_id = channel_ids[i]
-        xml_str.image().Pixels.Channel(i).ID = channel_id
+        xml.images[0].pixels.channels[i].id = channel_id
         # Extract channel information for structured annotations
-        ch_name = updated_channel_names[i]
+        ch_name = channelNames[i]
         original_name = original_channel_names[i]
-        ch_info = generate_sa_ch_info(ch_name, original_name, antibodies_df, channel_id)
-        full_ch_info = full_ch_info + ch_info
-    struct_annot = add_structured_annotations(xml_str.to_xml("utf-8"), full_ch_info)
-    return struct_annot
+        ch_info = generate_sa_ch_info(ch_name, original_name, antb_info, channel_id)
+        xml.structured_annotations.append(XMLAnnotation(value=ch_info))
+    return xml
