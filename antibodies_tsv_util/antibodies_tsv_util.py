@@ -6,23 +6,10 @@ from typing import List, Optional
 
 import pandas as pd
 from tifffile import TiffFile
-from ome_types import XMLAnnotation
+from ome_types.model import TextAnnotation, StructuredAnnotationList
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s - %(message)s")
 logger = logging.getLogger(__name__)
-
-structured_annotation_template = """<StructuredAnnotations>
-<XMLAnnotation ID="Annotation:1">
-    <Value>
-        <OriginalMetadata>
-            <Key>ProteinIDMap</Key>
-            <Value>
-                {protein_id_map_sa}
-            </Value>
-        </OriginalMetadata>
-    </Value>
-</XMLAnnotation>
-</StructuredAnnotations>"""
 
 metadata_filename_pattern = re.compile(r"^[0-9A-Fa-f]{32}antibodies\.tsv$")
 
@@ -47,37 +34,26 @@ def add_cycle_channel_numbers(channel_names: List[str]) -> List[str]:
     return new_names
 
 
-def add_structured_annotations(xml_string: str, sa_str: str) -> str:
-    """
-    Adds structured annotation at correct location. May need to be used in a loop depending on use.
-    """
-    sa_placement = xml_string.find("</Image>") + len("</Image>")
-    xml_string = xml_string[:sa_placement] + sa_str + xml_string[sa_placement:]
-    return xml_string
-
-
 def generate_sa_ch_info(
     ch_name: str, og_name: str, antb_info: Optional[pd.DataFrame], channel_id
-) -> str:
+) -> TextAnnotation:
     """
     Extracts channel info from the original metadata and antibodies.tsv for the structured annotations.
     """
-    empty_ch_info = f'<Channel ID="{channel_id}" Name="{ch_name}" OriginalName="None" UniprotID="None" RRID="None" AntibodiesTsvID="None"/>'
-    if antb_info is None:
-        ch_info = empty_ch_info
+    empty_ch_info = f'Channel ID="{channel_id}" Name="{ch_name}" OriginalName="None" UniprotID="None" RRID="None" AntibodiesTsvID="None"'
+    if antb_info is not None and ch_name in antb_info["target"].to_list():
+        ch_ind = antb_info[antb_info["target"] == ch_name].index[0]
+        new_ch_name = antb_info.at[ch_ind, "target"]
+        uniprot_id = antb_info.at[ch_ind, "uniprot_accession_number"]
+        rr_id = antb_info.at[ch_ind, "rr_id"]
+        antb_id = antb_info.at[ch_ind, "channel_id"]
+        original_name = og_name
+        # Update the TextAnnotation with the new channel information
+        ch_info = f'Channel ID="{channel_id}" Name="{new_ch_name}" OriginalName="{original_name}" UniprotID="{uniprot_id}" RRID="{rr_id}" AntibodiesTsvID="{antb_id}"'
     else:
-        if ch_name in antb_info["target"].to_list():
-            ch_ind = antb_info[antb_info["target"] == ch_name].index[0]
-            new_ch_name = antb_info.at[ch_ind, "target"]
-            uniprot_id = antb_info.at[ch_ind, "uniprot_accession_number"]
-            rr_id = antb_info.at[ch_ind, "rr_id"]
-            antb_id = antb_info.at[ch_ind, "channel_id"]
-            original_name = og_name
-            ch_info = f'<Channel ID="{channel_id}" Name="{new_ch_name}" OriginalName="{original_name}" UniprotID="{uniprot_id}" RRID="{rr_id}" AntibodiesTsvID="{antb_id}"/>'
-            return ch_info
-        else:
-            ch_info = empty_ch_info
-    return ch_info
+        ch_info = empty_ch_info
+    annotation = TextAnnotation(description=ch_info)
+    return annotation
 
 
 def get_analyte_name(antibody_name: str) -> str:
@@ -227,6 +203,7 @@ def get_original_names(og_ch_names_df: pd.DataFrame, antibodies_df: pd.DataFrame
 
 def generate_structured_annotations(xml, channel_ids, og_ch_names_df, antb_info, channelNames ):
     original_channel_names = get_original_names(og_ch_names_df, antb_info)
+    annotations = StructuredAnnotationList()
     for i in range(len(channelNames)):
         xml.images[0].pixels.channels[i].name = channelNames[i]
         channel_id = channel_ids[i]
@@ -235,5 +212,6 @@ def generate_structured_annotations(xml, channel_ids, og_ch_names_df, antb_info,
         ch_name = channelNames[i]
         original_name = original_channel_names[i]
         ch_info = generate_sa_ch_info(ch_name, original_name, antb_info, channel_id)
-        xml.structured_annotations.append(XMLAnnotation(value=ch_info))
+        annotations.append(ch_info)
+    xml.structured_annotations = annotations
     return xml
