@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import pandas as pd
 from tifffile import TiffFile
-from ome_types.model import TextAnnotation, StructuredAnnotationList
+from ome_types.model import MapAnnotation, StructuredAnnotationList, Map
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -35,24 +35,29 @@ def add_cycle_channel_numbers(channel_names: List[str]) -> List[str]:
 
 
 def generate_sa_ch_info(
-    ch_name: str, og_name: str, antb_info: Optional[pd.DataFrame], channel_id
-) -> TextAnnotation:
-    """
-    Extracts channel info from the original metadata and antibodies.tsv for the structured annotations.
-    """
-    empty_ch_info = f'Channel ID="{channel_id}" Name="{ch_name}" OriginalName="None" UniprotID="None" RRID="None" AntibodiesTsvID="None"'
-    if antb_info is not None and ch_name in antb_info["target"].to_list():
-        ch_ind = antb_info[antb_info["target"] == ch_name].index[0]
-        new_ch_name = antb_info.at[ch_ind, "target"]
-        uniprot_id = antb_info.at[ch_ind, "uniprot_accession_number"]
-        rr_id = antb_info.at[ch_ind, "rr_id"]
-        antb_id = antb_info.at[ch_ind, "channel_id"]
-        original_name = og_name
-        # Update the TextAnnotation with the new channel information
-        ch_info = f'Channel ID="{channel_id}" Name="{new_ch_name}" OriginalName="{original_name}" UniprotID="{uniprot_id}" RRID="{rr_id}" AntibodiesTsvID="{antb_id}"'
-    else:
-        ch_info = empty_ch_info
-    annotation = TextAnnotation(description=ch_info)
+    channel_id: str,
+    og_ch_names_info: pd.Series,
+    antb_info: Optional[pd.DataFrame],
+) -> Optional[MapAnnotation]:
+    if antb_info is None:
+        return None
+    cycle, channel = og_ch_names_info["Cycle"], og_ch_names_info["Channel"]
+    try:
+        antb_row = antb_info.loc[(cycle, channel), :]
+    except KeyError:
+        return None
+
+    uniprot_id = antb_row["uniprot_accession_number"]
+    rrid = antb_row["rr_id"]
+    antb_id = antb_row["channel_id"]
+    ch_key = Map.M(k="Channel ID", value=channel_id)
+    name_key = Map.M(k="Name", value=antb_row["target"])
+    og_name_key = Map.M(k="Original Name", value=og_ch_names_info["channel_name"])
+    uniprot_key = Map.M(k="UniprotID", value=uniprot_id)
+    rrid_key = Map.M(k="RRID", value=rrid)
+    antb_id_key = Map.M(k="AntibodiesTsvID", value=antb_id)
+    ch_info = Map(ms=[ch_key, name_key, og_name_key, uniprot_key, rrid_key, antb_id_key])
+    annotation = MapAnnotation(value=ch_info)
     return annotation
 
 
@@ -172,6 +177,8 @@ def create_original_channel_names_df(channelList: List[str]) -> pd.DataFrame:
     og_ch_names_df[["Cycle", "Channel", "channel_name"]] = og_ch_names_df[
         "Original_Channel_Name"
     ].str.extract(cyc_ch_pattern)
+    og_ch_names_df["Cycle"] = pd.to_numeric(og_ch_names_df["Cycle"])
+    og_ch_names_df["Channel"] = pd.to_numeric(og_ch_names_df["Channel"])
     og_ch_names_df["channel_id"] = (
         "cycle" + og_ch_names_df["Cycle"] + "_ch" + og_ch_names_df["Channel"]
     )
