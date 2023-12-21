@@ -1,1 +1,1 @@
-import antibodies_tsv_util 
+from antibodies_tsv_util import *
